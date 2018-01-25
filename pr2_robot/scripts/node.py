@@ -202,7 +202,8 @@ if __name__ == '__main__':
 
     # Create Subscribers
     pcl_subscriber = rospy.Subscriber(
-        'sensor_stick/point_cloud/', PointCloud2, pcl_callback, queue_size=1)
+        '/pr2/world/points', PointCloud2, pcl_callback, queue_size=1)
+
 
     # Create Publishers
     pcl_obj_pub = rospy.Publisher('/pcl_objects', PointCloud2, queue_size=1)
