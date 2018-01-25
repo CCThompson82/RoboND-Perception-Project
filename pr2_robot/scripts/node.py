@@ -52,7 +52,11 @@ def pcl_callback(pcl_msg):
     # Convert ROS msg to PCL data
     cloud = util.ros_to_pcl(pcl_msg)
 
-    # TODO: Statistical Outlier Filtering
+    outlier_filter = cloud_filtered.make_statistical_outlier_filter()
+    outlier_filter.set_mean_k(50)
+    x = 1.0
+    outlier_filter.set_std_dev_mul_thresh(x)
+    cloud_filtered = outlier_filter.filter()
 
     # Voxel Grid Downsampling
     voxelator = cloud.make_voxel_grid_filter()
@@ -198,20 +202,19 @@ def pr2_mover(object_list):
 if __name__ == '__main__':
 
     # ROS node initialization
-    rospy.init_node('object_detection', anonymous=True)
+    rospy.init_node('perception_pick_place', anonymous=True)
 
     # Create Subscribers
     pcl_subscriber = rospy.Subscriber(
         '/pr2/world/points', PointCloud2, pcl_callback, queue_size=1)
 
-
     # Create Publishers
-    pcl_obj_pub = rospy.Publisher('/pcl_objects', PointCloud2, queue_size=1)
-    pcl_table_pub = rospy.Publisher('/pcl_table', PointCloud2, queue_size=1)
-    pcl_cluster_pub = rospy.Publisher('/pcl_cluster', PointCloud2, queue_size=1)
+    pcl_obj_pub = rospy.Publisher('/perception_pick_place/pcl_objects', PointCloud2, queue_size=1)
+    pcl_table_pub = rospy.Publisher('/perception_pick_place/pcl_table', PointCloud2, queue_size=1)
+    pcl_cluster_pub = rospy.Publisher('/perception_pick_place/pcl_cluster', PointCloud2, queue_size=1)
 
-    object_markers_pub = rospy.Publisher('/object_markers', Marker, queue_size=1)
-    detected_objects_pub = rospy.Publisher('/detected_objects', DetectedObjectsArray, queue_size=1)
+    object_markers_pub = rospy.Publisher('/perception_pick_place/object_markers', Marker, queue_size=1)
+    detected_objects_pub = rospy.Publisher('/perception_pick_place/detected_objects', DetectedObjectsArray, queue_size=1)
 
     # Load Model From disk
     model = pickle.load(open('model.sav', 'rb'))
