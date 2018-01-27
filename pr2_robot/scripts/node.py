@@ -12,8 +12,8 @@ from visualization_msgs.msg import Marker
 from sensor_stick.marker_tools import *
 from sensor_stick.msg import DetectedObjectsArray
 from sensor_stick.msg import DetectedObject
-from sensor_stick.pcl_helper import *
-
+import sensor_stick.pcl_helper as util
+import pcl
 import rospy
 import tf
 from geometry_msgs.msg import Pose
@@ -23,6 +23,8 @@ from std_msgs.msg import String
 from pr2_robot.srv import *
 from rospy_message_converter import message_converter
 import yaml
+from sensor_msgs.msg import PointCloud2
+from sensor_stick.marker_tools import *
 
 
 # Helper function to get surface normals
@@ -52,7 +54,8 @@ def pcl_callback(pcl_msg):
     # Convert ROS msg to PCL data
     cloud = util.ros_to_pcl(pcl_msg)
 
-    outlier_filter = cloud_filtered.make_statistical_outlier_filter()
+    # Statistical Outlier Filtering
+    outlier_filter = cloud.make_statistical_outlier_filter()
     outlier_filter.set_mean_k(50)
     x = 1.0
     outlier_filter.set_std_dev_mul_thresh(x)
@@ -68,7 +71,7 @@ def pcl_callback(pcl_msg):
     passthrough = cloud_filtered.make_passthrough_filter()
     filter_axis = 'z'
     passthrough.set_filter_field_name(filter_axis)
-    axis_min, axis_max = 0.75, 1.1
+    axis_min, axis_max = 0.60, 1.1
     passthrough.set_filter_limits(axis_min, axis_max)
     passthrough_filtered = passthrough.filter()
 
@@ -106,16 +109,18 @@ def pcl_callback(pcl_msg):
     cluster_cloud.from_list(color_cluster_point_list)
 
     # Convert PCL data to ROS messages
+    denoise_msg = util.pcl_to_ros(cloud_filtered)
+    passthrough_msg = util.pcl_to_ros(passthrough_filtered)
     obj_msg = util.pcl_to_ros(cloud_objects)
     table_msg = util.pcl_to_ros(cloud_table)
     cluster_msg = util.pcl_to_ros(cluster_cloud)
 
     # Publish ROS messages
+    denoise_pub.publish(denoise_msg)
+    passthrough_pub.publish(passthrough_msg)
     pcl_obj_pub.publish(obj_msg)
     pcl_table_pub.publish(table_msg)
     pcl_cluster_pub.publish(cluster_msg)
-
-
 
     # Classify the clusters! (loop through each detected cluster one at a time)
     detected_objects_labels = []
@@ -155,10 +160,10 @@ def pcl_callback(pcl_msg):
     # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
     # Could add some logic to determine whether or not your object detections are robust
     # before calling pr2_mover()
-    try:
-        pr2_mover(detected_objects_list)
-    except rospy.ROSInterruptException:
-        pass
+    # try:
+    #     pr2_mover(detected_objects_list)
+    # except rospy.ROSInterruptException:
+    #     pass
 
 # function to load parameters and request PickPlace service
 def pr2_mover(object_list):
@@ -209,6 +214,8 @@ if __name__ == '__main__':
         '/pr2/world/points', PointCloud2, pcl_callback, queue_size=1)
 
     # Create Publishers
+    denoise_pub = rospy.Publisher('/perception_pick_place/denoise_pub', PointCloud2, queue_size=1)
+    passthrough_pub = rospy.Publisher('/perception_pick_place/passthrough_pub', PointCloud2, queue_size=1)
     pcl_obj_pub = rospy.Publisher('/perception_pick_place/pcl_objects', PointCloud2, queue_size=1)
     pcl_table_pub = rospy.Publisher('/perception_pick_place/pcl_table', PointCloud2, queue_size=1)
     pcl_cluster_pub = rospy.Publisher('/perception_pick_place/pcl_cluster', PointCloud2, queue_size=1)
