@@ -18,7 +18,7 @@ import sensor_stick.pcl_helper as util
 import pcl
 import rospy
 import tf
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Point, Quaternion
 from std_msgs.msg import Float64
 from std_msgs.msg import Int32
 from std_msgs.msg import String
@@ -139,7 +139,7 @@ def pcl_callback(pcl_msg):
     pcl_cluster_pub.publish(cluster_msg)
 
     # Classify the clusters! (loop through each detected cluster one at a time)
-    objects = []
+    objects_ls = []
     labels = []
     centroids = []
     for idx, pts_ls in enumerate(cluster_indices):
@@ -163,69 +163,118 @@ def pcl_callback(pcl_msg):
         label_pos[2] += .4
         object_markers_pub.publish(make_label(label, label_pos, idx))
 
-        # # Add the detected object to the list of detected objects.
-        # do = DetectedObject()
-        # do.label = label
-        # do.cloud = pcl_cluster
-        # objects.append(do)
-        #
-        # # add the centroid to the centroids ls
-        # pts_arr = np.asarray(pcl_cluster)[:, :3]
-        # centroid = np.mean(pts_arr, axis=0)
-        # # TODO: change centroid type
-        # centroids.append(centroid)
-
+        # Add the detected object to the list of detected objects.
+        do = DetectedObject()
+        do.label = label
+        do.cloud = pcl_cluster
+        objects_ls.append(do)
 
     # Publish the list of detected objects
     rospy.loginfo('Detected {} objects: {}'.format(len(labels), labels))
-    detected_objects_pub.publish(objects)
+    detected_objects_pub.publish(objects_ls)
 
-    # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
-    # Could add some logic to determine whether or not your object detections are robust
-    # before calling pr2_mover()
-    # try:
-    #     pr2_mover(detected_objects_list)
-    # except rospy.ROSInterruptException:
-    #     pass
+    try:
+        pr2_mover(objects_ls=objects_ls)
+    except rospy.ROSInterruptException:
+        pass
 
 # function to load parameters and request PickPlace service
 def pr2_mover(objects_ls):
 
-    # TODO: Initialize variables
+    # Initialize variables
+    labels, centroids = [], []
+    dict_ls = []
 
-    # TODO: Get/Read parameters
+    # Get/Read parameters
+    pick_ls = rospy.get_param('/object_list')
+    place_poses = rospy.get_param('/dropbox')
 
-    # TODO: Parse parameters into individual variables
+    test_scene_num = Int32()
+    test_scene_num.data = int(rospy.get_param('/world_id_param'))
 
-    # TODO: Rotate PR2 in place to capture side tables for the collision map
+    # Parse parameters into individual variables
+    pick_d = {item['name']:item['group'] for item in pick_ls}
+    place_d = {item['group']:
+        {'name': item['name'], 'position': item['position']} for item in place_poses}
 
-    # TODO: Loop through the pick list
 
-        # TODO: Get the PointCloud for a given object and obtain it's centroid
+    # Rotate PR2 in place to capture side tables for the collision map
+    elapsed = 0
+    start_time = rospy.Time.now().to_sec()
+    rate = rospy.Rate(1)
+    while elapsed < 15:
+        elapsed = rospy.Time.now().to_sec() - start_time
+        angle = np.pi/2
+        rotate_base_pub.publish(angle)
+        rate.sleep()
+    elapsed = 0
+    start_time = rospy.Time.now().to_sec()
+    while elapsed < 30:
+        elapsed = rospy.Time.now().to_sec() - start_time
+        angle = -np.pi/2
+        rotate_base_pub.publish(angle)
+        rate.sleep()
+    elapsed = 0
+    start_time = rospy.Time.now().to_sec()
+    while elapsed < 15:
+        elapsed = rospy.Time.now().to_sec() - start_time
+        angle = 0
+        rotate_base_pub.publish(angle)
+        rate.sleep()
 
-        # TODO: Create 'place_pose' for the object
 
-        # TODO: Assign the arm to be used for pick_place
+    # Loop through the pick list
+    for det_obj in objects_ls:
+        # object name
+        object_name = String()
+        object_name.data = str(det_obj.label)
 
-        # TODO: Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
 
+        # choose which arm
+        arm_name = String()
+        box_color = pick_d[object_name.data]
+        arm_name.data = place_d[box_color]['name']
+
+        # pick pose
+        # Get the PointCloud for a given object and obtain it's centroid
+        points_arr = det_obj.cloud.to_array()[:, :3]
+        centroid = [np.asscalar(xyz) for xyz in np.mean(points_arr, axis=0)]
+
+        pick_pose = Pose()
+        pick_pose.position = Point(x=centroid[0], y=centroid[1], z=centroid[2])
+        pick_pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
+
+        # Create 'place_pose' for the object
+        place_pose = Pose()
+        place_pose.position = Point(x=place_d[box_color]['position'][0],
+                                    y=place_d[box_color]['position'][1],
+                                    z=place_d[box_color]['position'][2])
+        place_pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
+
+        # Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
+        yaml_dict = make_yaml_dict(test_scene_num, arm_name, object_name,
+                                   pick_pose, place_pose)
+        dict_ls.append(yaml_dict)
         # Wait for 'pick_place_routine' service to come up
         rospy.wait_for_service('pick_place_routine')
 
         try:
             pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
 
-            # TODO: Insert your message variables to be sent as a service request
-            resp = pick_place_routine(TEST_SCENE_NUM, OBJECT_NAME, WHICH_ARM, PICK_POSE, PLACE_POSE)
+            # Insert your message variables to be sent as a service request
+            resp = pick_place_routine(test_scene_num, object_name, arm_name,
+                                      pick_pose, place_pose)
 
             print ("Response: ",resp.success)
 
         except rospy.ServiceException, e:
             print "Service call failed: %s"%e
 
-    # TODO: Output your request parameters into output yaml file
-
-
+    # # Output your request parameters into output yaml file
+    yaml_filename = os.path.join(
+        P_DIR, 'results', 'output_{}.yaml'.format(
+            rospy.get_param('/world_id_param')))
+    send_to_yaml(yaml_filename, dict_ls)
 
 if __name__ == '__main__':
 
@@ -250,6 +299,8 @@ if __name__ == '__main__':
 
     object_markers_pub = rospy.Publisher('/perception/object_markers', Marker, queue_size=1)
     detected_objects_pub = rospy.Publisher('/perception/detected_objects', DetectedObjectsArray, queue_size=1)
+
+    rotate_base_pub = rospy.Publisher('/pr2/world_joint_controller/command', Float64, queue_size=200)
 
     # Load Model From disk
     clf_fname = os.path.join(P_DIR, 'modelling', 'svm_clf.sav')

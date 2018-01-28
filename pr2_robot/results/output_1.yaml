@@ -1,0 +1,70 @@
+object_list:
+- arm_name: right
+  object_name: biscuits
+  pick_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0.5414518117904663
+      y: -0.24134226143360138
+      z: 0.7052066922187805
+  place_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0
+      y: -0.71
+      z: 0.605
+  test_scene_num: 1
+- arm_name: right
+  object_name: soap
+  pick_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0.544738233089447
+      y: -0.018544096499681473
+      z: 0.6767812371253967
+  place_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0
+      y: -0.71
+      z: 0.605
+  test_scene_num: 1
+- arm_name: left
+  object_name: soap2
+  pick_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0.44501933455467224
+      y: 0.22094455361366272
+      z: 0.676429271697998
+  place_pose:
+    orientation:
+      w: 1
+      x: 0
+      y: 0
+      z: 0
+    position:
+      x: 0
+      y: 0.71
+      z: 0.605
+  test_scene_num: 1
