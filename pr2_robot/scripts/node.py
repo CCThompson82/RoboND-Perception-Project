@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 # Import modules
+import os
+import sys
 import numpy as np
 import sklearn
 from sklearn.preprocessing import LabelEncoder
@@ -26,6 +28,8 @@ import yaml
 from sensor_msgs.msg import PointCloud2
 from sensor_stick.marker_tools import *
 
+#TODO: Make this generalize:
+P_DIR = '/home/chris/catkin_ws/src/RoboND-Perception-Project/pr2_robot'
 
 # Helper function to get surface normals
 def get_normals(cloud):
@@ -55,23 +59,31 @@ def pcl_callback(pcl_msg):
     cloud = util.ros_to_pcl(pcl_msg)
 
     # Statistical Outlier Filtering
+    K_MEAN = 5
     outlier_filter = cloud.make_statistical_outlier_filter()
-    outlier_filter.set_mean_k(50)
-    x = 1.0
-    outlier_filter.set_std_dev_mul_thresh(x)
-    cloud_filtered = outlier_filter.filter()
+    outlier_filter.set_mean_k(K_MEAN)
+    STD = 0.1
+    outlier_filter.set_std_dev_mul_thresh(STD)
+    denoised = outlier_filter.filter()
 
     # Voxel Grid Downsampling
-    voxelator = cloud.make_voxel_grid_filter()
-    LEAF_SIZE = 0.01
+    voxelator = denoised.make_voxel_grid_filter()
+    LEAF_SIZE = 0.005
     voxelator.set_leaf_size(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE)
-    cloud_filtered = voxelator.filter()
+    vox_downsampled = voxelator.filter()
 
     # PassThrough Filter
-    passthrough = cloud_filtered.make_passthrough_filter()
+    passthrough = vox_downsampled.make_passthrough_filter()
     filter_axis = 'z'
     passthrough.set_filter_field_name(filter_axis)
     axis_min, axis_max = 0.60, 1.1
+    passthrough.set_filter_limits(axis_min, axis_max)
+    passthrough_z = passthrough.filter()
+    # PassThrough Filter Y
+    passthrough = passthrough_z.make_passthrough_filter()
+    filter_axis = 'y'
+    passthrough.set_filter_field_name(filter_axis)
+    axis_min, axis_max = -0.5, 0.5
     passthrough.set_filter_limits(axis_min, axis_max)
     passthrough_filtered = passthrough.filter()
 
@@ -79,7 +91,7 @@ def pcl_callback(pcl_msg):
     table_seg = passthrough_filtered.make_segmenter()
     table_seg.set_model_type(pcl.SACMODEL_PLANE)
     table_seg.set_method_type(pcl.SAC_RANSAC)
-    MAX_DISTANCE = 0.02
+    MAX_DISTANCE = 0.01
     table_seg.set_distance_threshold(MAX_DISTANCE)
     inliers, coefficients = table_seg.segment()
 
@@ -92,31 +104,35 @@ def pcl_callback(pcl_msg):
     tree = white_cloud.make_kdtree()
     ec = white_cloud.make_EuclideanClusterExtraction()
     ec.set_ClusterTolerance(0.05)
-    ec.set_MinClusterSize(50)
-    ec.set_MaxClusterSize(1000)
+    ec.set_MinClusterSize(200)
+    ec.set_MaxClusterSize(5000)
     ec.set_SearchMethod(tree)
     cluster_indices = ec.Extract()
 
     # Create Cluster-Mask Point Cloud to visualize each cluster separately
     cluster_color = util.get_color_list(len(cluster_indices))
     color_cluster_point_list = []
-    for j, indices in enumerate(cluster_indices):
-        for i, indice in enumerate(indices):
+    for j, index in enumerate(cluster_indices):
+        for i, index in enumerate(index):
             color_cluster_point_list.append(
-                [white_cloud[indice][0], white_cloud[indice][1],
-                 white_cloud[indice][2], util.rgb_to_float(cluster_color[j])])
+                [white_cloud[index][0], white_cloud[index][1],
+                 white_cloud[index][2], util.rgb_to_float(cluster_color[j])])
     cluster_cloud = pcl.PointCloud_PointXYZRGB()
     cluster_cloud.from_list(color_cluster_point_list)
 
     # Convert PCL data to ROS messages
-    denoise_msg = util.pcl_to_ros(cloud_filtered)
+    orig_cloud_msg = util.pcl_to_ros(cloud)
+    denoise_msg = util.pcl_to_ros(denoised)
+    vox_down_msg = util.pcl_to_ros(vox_downsampled)
     passthrough_msg = util.pcl_to_ros(passthrough_filtered)
     obj_msg = util.pcl_to_ros(cloud_objects)
     table_msg = util.pcl_to_ros(cloud_table)
     cluster_msg = util.pcl_to_ros(cluster_cloud)
 
     # Publish ROS messages
+    incoming_cloud_pub.publish(orig_cloud_msg)
     denoise_pub.publish(denoise_msg)
+    downsampled_pub.publish(vox_down_msg)
     passthrough_pub.publish(passthrough_msg)
     pcl_obj_pub.publish(obj_msg)
     pcl_table_pub.publish(table_msg)
@@ -148,6 +164,8 @@ def pcl_callback(pcl_msg):
         object_markers_pub.publish(make_label(label,label_pos, idx))
 
         # Add the detected object to the list of detected objects.
+
+
         do = DetectedObject()
         do.label = label
         do.cloud = pcl_cluster
@@ -207,24 +225,30 @@ def pr2_mover(object_list):
 if __name__ == '__main__':
 
     # ROS node initialization
-    rospy.init_node('perception_pick_place', anonymous=True)
+    rospy.init_node('perception', anonymous=True)
+
+    # get the pick list from the param server
+    object_list_param = rospy.get_param('/object_list')
 
     # Create Subscribers
     pcl_subscriber = rospy.Subscriber(
         '/pr2/world/points', PointCloud2, pcl_callback, queue_size=1)
 
     # Create Publishers
-    denoise_pub = rospy.Publisher('/perception_pick_place/denoise_pub', PointCloud2, queue_size=1)
-    passthrough_pub = rospy.Publisher('/perception_pick_place/passthrough_pub', PointCloud2, queue_size=1)
-    pcl_obj_pub = rospy.Publisher('/perception_pick_place/pcl_objects', PointCloud2, queue_size=1)
-    pcl_table_pub = rospy.Publisher('/perception_pick_place/pcl_table', PointCloud2, queue_size=1)
-    pcl_cluster_pub = rospy.Publisher('/perception_pick_place/pcl_cluster', PointCloud2, queue_size=1)
+    incoming_cloud_pub = rospy.Publisher('/perception/original_cloud', PointCloud2, queue_size=1)
+    denoise_pub = rospy.Publisher('/perception/denoised', PointCloud2, queue_size=1)
+    downsampled_pub = rospy.Publisher('/perception/downsampled', PointCloud2, queue_size=1)
+    passthrough_pub = rospy.Publisher('/perception/passthrough', PointCloud2, queue_size=1)
+    pcl_obj_pub = rospy.Publisher('/perception/objects', PointCloud2, queue_size=1)
+    pcl_table_pub = rospy.Publisher('/perception/table', PointCloud2, queue_size=1)
+    pcl_cluster_pub = rospy.Publisher('/perception/clusters', PointCloud2, queue_size=1)
 
-    object_markers_pub = rospy.Publisher('/perception_pick_place/object_markers', Marker, queue_size=1)
-    detected_objects_pub = rospy.Publisher('/perception_pick_place/detected_objects', DetectedObjectsArray, queue_size=1)
+    object_markers_pub = rospy.Publisher('/perception/object_markers', Marker, queue_size=1)
+    detected_objects_pub = rospy.Publisher('/perception/detected_objects', DetectedObjectsArray, queue_size=1)
 
     # Load Model From disk
-    model = pickle.load(open('model.sav', 'rb'))
+    clf_fname = os.path.join(P_DIR, 'modelling', 'svm_clf.sav')
+    model = pickle.load(open(clf_fname, 'rb'))
     clf = model['classifier']
     encoder = LabelEncoder()
     encoder.classes_ = model['classes']
