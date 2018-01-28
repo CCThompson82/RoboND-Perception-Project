@@ -7,7 +7,7 @@
   <rosparam command="load" file="$(find pr2_moveit)/config/grasp.yaml"/>
   <rosparam command="load" file="$(find pr2_robot)/config/dropbox.yaml"/>
 
-  <arg name="world_id" value="1" />
+  <arg name="world_id" value="3" />
   <param name="world_id_param" type="str" value="$(arg world_id)" />
 
   <!--Launch a gazebo world-->

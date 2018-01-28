@@ -232,8 +232,11 @@ def pr2_mover(objects_ls):
 
         # choose which arm
         arm_name = String()
-        box_color = pick_d[object_name.data]
-        arm_name.data = place_d[box_color]['name']
+        try:
+            box_color = pick_d[object_name.data]
+            arm_name.data = place_d[box_color]['name']
+        except KeyError:
+            continue
 
         # pick pose
         # Get the PointCloud for a given object and obtain it's centroid
