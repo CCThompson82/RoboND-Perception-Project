@@ -112,11 +112,11 @@ def pcl_callback(pcl_msg):
     # Create Cluster-Mask Point Cloud to visualize each cluster separately
     cluster_color = util.get_color_list(len(cluster_indices))
     color_cluster_point_list = []
-    for j, index in enumerate(cluster_indices):
-        for i, index in enumerate(index):
+    for j, cluster in enumerate(cluster_indices):
+        for idx in cluster:
             color_cluster_point_list.append(
-                [white_cloud[index][0], white_cloud[index][1],
-                 white_cloud[index][2], util.rgb_to_float(cluster_color[j])])
+                [white_cloud[idx][0], white_cloud[idx][1],
+                 white_cloud[idx][2], util.rgb_to_float(cluster_color[j])])
     cluster_cloud = pcl.PointCloud_PointXYZRGB()
     cluster_cloud.from_list(color_cluster_point_list)
 
@@ -139,9 +139,9 @@ def pcl_callback(pcl_msg):
     pcl_cluster_pub.publish(cluster_msg)
 
     # Classify the clusters! (loop through each detected cluster one at a time)
-    detected_objects_labels = []
-    detected_objects = []
-
+    objects = []
+    labels = []
+    centroids = []
     for idx, pts_ls in enumerate(cluster_indices):
         # Grab the points for the cluster
         pcl_cluster = cloud_objects.extract(pts_ls)
@@ -154,26 +154,31 @@ def pcl_callback(pcl_msg):
         feature = np.concatenate((chists, nhists))
 
         # Make the prediction
-        prediction = clf.predict(scaler.transform(feature.reshape(1,-1)))
+        prediction = clf.predict(scaler.transform(feature.reshape(1, -1)))
         label = encoder.inverse_transform(prediction)[0]
-        detected_objects_labels.append(label)
+        labels.append(label)
 
         # Publish a label into RViz
         label_pos = list(white_cloud[pts_ls[0]])
         label_pos[2] += .4
-        object_markers_pub.publish(make_label(label,label_pos, idx))
+        object_markers_pub.publish(make_label(label, label_pos, idx))
 
-        # Add the detected object to the list of detected objects.
+        # # Add the detected object to the list of detected objects.
+        # do = DetectedObject()
+        # do.label = label
+        # do.cloud = pcl_cluster
+        # objects.append(do)
+        #
+        # # add the centroid to the centroids ls
+        # pts_arr = np.asarray(pcl_cluster)[:, :3]
+        # centroid = np.mean(pts_arr, axis=0)
+        # # TODO: change centroid type
+        # centroids.append(centroid)
 
-
-        do = DetectedObject()
-        do.label = label
-        do.cloud = pcl_cluster
-        detected_objects.append(do)
 
     # Publish the list of detected objects
-    rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
-    detected_objects_pub.publish(detected_objects)
+    rospy.loginfo('Detected {} objects: {}'.format(len(labels), labels))
+    detected_objects_pub.publish(objects)
 
     # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
     # Could add some logic to determine whether or not your object detections are robust
@@ -184,7 +189,7 @@ def pcl_callback(pcl_msg):
     #     pass
 
 # function to load parameters and request PickPlace service
-def pr2_mover(object_list):
+def pr2_mover(objects_ls):
 
     # TODO: Initialize variables
 
