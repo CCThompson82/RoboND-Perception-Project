@@ -19,9 +19,9 @@ import pcl
 import rospy
 import tf
 from geometry_msgs.msg import Pose, Point, Quaternion
-from std_msgs.msg import Float64
-from std_msgs.msg import Int32
-from std_msgs.msg import String
+from std_msgs.msg import Float64, Int32, String
+from sensor_msgs.msg import JointState
+
 from pr2_robot.srv import *
 from rospy_message_converter import message_converter
 import yaml
@@ -197,32 +197,6 @@ def pr2_mover(objects_ls):
     place_d = {item['group']:
         {'name': item['name'], 'position': item['position']} for item in place_poses}
 
-
-    # Rotate PR2 in place to capture side tables for the collision map
-    elapsed = 0
-    start_time = rospy.Time.now().to_sec()
-    rate = rospy.Rate(1)
-    while elapsed < 15:
-        elapsed = rospy.Time.now().to_sec() - start_time
-        angle = np.pi/2
-        rotate_base_pub.publish(angle)
-        rate.sleep()
-    elapsed = 0
-    start_time = rospy.Time.now().to_sec()
-    while elapsed < 30:
-        elapsed = rospy.Time.now().to_sec() - start_time
-        angle = -np.pi/2
-        rotate_base_pub.publish(angle)
-        rate.sleep()
-    elapsed = 0
-    start_time = rospy.Time.now().to_sec()
-    while elapsed < 15:
-        elapsed = rospy.Time.now().to_sec() - start_time
-        angle = 0
-        rotate_base_pub.publish(angle)
-        rate.sleep()
-
-
     # Loop through the pick list
     for det_obj in objects_ls:
         # object name
@@ -303,7 +277,8 @@ if __name__ == '__main__':
     object_markers_pub = rospy.Publisher('/perception/object_markers', Marker, queue_size=1)
     detected_objects_pub = rospy.Publisher('/perception/detected_objects', DetectedObjectsArray, queue_size=1)
 
-    rotate_base_pub = rospy.Publisher('/pr2/world_joint_controller/command', Float64, queue_size=200)
+    rotate_base_pub = rospy.Publisher('/pr2/world_joint_controller/command', Float64, queue_size=1)
+    occmap_pub = rospy.Publisher('/pr2/3d_map/points', PointCloud2, queue_size=1)
 
     # Load Model From disk
     clf_fname = os.path.join(P_DIR, 'modelling', 'svm_clf.sav')
