@@ -16,7 +16,7 @@ unique object clusters, and then predicting the label for each unique cluster.  
 [denoised]: ./misc_images/denoised.png
 [passthrough]: ./misc_images/passthrough.png
 [voxel]: ./misc_images/voxel_filter.png
-[table]: ./misc_images/table.png
+[conmat]: ./misc_images/conmat.png
 [objects]: ./misc_images/objects.png
 [clusters]: ./misc_images/clusters.png
 
@@ -36,8 +36,10 @@ In `capture_features.py`, the number of pointclouds recorded for each object was
 Once parameters were set, `training.launch` was launched which resulted in a training set pickle being
 stored to the `pr2_robot/modelling` directory.  `train_svm` was then run, which received this
 training set, fit a linear svm classifer, and provided cross-validation confusion matrix for the
-models performance.  The accuracy of the model exceeded 80% for all objects in a 5-fold cross-validation.
+models performance.  The accuracy of the model exceeded 60% for all objects in a 5-fold cross-validation.
 
+![alt_text][conmat]
+**Figure 1**- Confusion matrix for svm classifier performance trained on normality and color feature extraction.
 
 ### ROS NODE
 
@@ -49,18 +51,18 @@ inspection, debugging, and demonstration purposes.
 ### Filtering
 
 The raw incoming pointcloud feed requires processing in order to be efficiently used.  An
-example of the incoming feed is seen in Figure 1.  
+example of the incoming feed is seen in Figure 2.  
 
 ![alt text][raw]
-**Figure 1**- The raw pointcloud feed contains stochastic noise.  
+**Figure 2**- The raw pointcloud feed contains stochastic noise.  
 
 #### Statistical Outlier Filter
 A statistical outlier filter was used to remove points that exceeded the standard
 deviation position from their neighborhood average.  The resultant feed after this denoising
-can be observed in Figure 2.  
+can be observed in Figure 3.  
 
 ![alt_text][denoised]
-**Figure 2**- Removal of statistical outliers cleans the pointcloud feed to a more
+**Figure 3**- Removal of statistical outliers cleans the pointcloud feed to a more
 accurate representation of reality.  
 
 #### Voxelation
@@ -68,10 +70,10 @@ Once outliers were removed, a voxelation filter could be applied for an accurate
 representation of reality.  Voxelation is the compression of a pointcloud into specific positions
 based on the presence or absence of raw points in that volume of the original feed.  The result
 is a downsampled feed that does not lose much information, as nearly coincident points are
-merged into the same voxel position.  An example of voxelation is shown in Figure 3.
+merged into the same voxel position.  An example of voxelation is shown in Figure 4.
 
 ![alt_text][voxel]
-**Figure 3**- Voxel downsampling of the denoised pointcloud
+**Figure 4**- Voxel downsampling of the denoised pointcloud
 
 
 #### Passthrough Filter
@@ -86,10 +88,10 @@ The next step of the pipeline was to isolate objects on top of the table from th
 the table itself.  To accomplish this feat, a Random Sample Consensus filter was applied to the
 passthrough pointcloud.  Given a plane height of approximately 2 cm, the RANSAC filter was capable
 of isolating points belonging to the objects from points belonging to the table.  An example of the
-RANSAC filter outlier feed (objects) is shown in Figure 4.
+RANSAC filter outlier feed (objects) is shown in Figure 5.
 
 ![alt_text][objects]
-**Figure 4**- RANSAC separation of the table (not shown) from the object clusters.
+**Figure 5**- RANSAC separation of the table (not shown) from the object clusters.
 
 #### Euclidean Clustering
 The PCL implementation is a DBSCAN-like algorithm for assigning points of a pointcloud to
@@ -97,10 +99,10 @@ cluster groups.  The parameters required are a tolerance level (i.e. an approxim
 search for neighboring points), the minimum size of a valid cluster, and the maximum size of
 a valid cluster.  The tolerance setting can dictate whether multiple groups are classified together,
 or whether a single cluster is classified into multiple groups, and is usually set emperically.
-Figure 5 shows the unique clustering that the Euclidean Clustering algorithm can acheive.  
+Figure 6 shows the unique clustering that the Euclidean Clustering algorithm can acheive.  
 
 ![alt_text][clusters]
-**Figure 5**- Unique clusters identified by Euclidean Clustering.  But which cluster is which object?!
+**Figure 6**- Unique clusters identified by Euclidean Clustering.  But which cluster is which object?!
 
 #### Object Detection
 Having seperated individual clouds into unique clusters, we are now able to perform object prediction
