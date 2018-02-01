@@ -49,7 +49,7 @@ via `pcl_subscriber`, and each step of the filtering pipeline was published for 
 inspection, debugging, and demonstration purposes.
 
 ### Filtering
-
+All filtering steps were performed within the `pcl_callback` function in `node.py`.
 The raw incoming pointcloud feed requires processing in order to be efficiently used.  An
 example of the incoming feed is seen in Figure 2.  
 
@@ -93,13 +93,14 @@ RANSAC filter outlier feed (objects) is shown in Figure 5.
 ![alt_text][objects]
 **Figure 5**- RANSAC separation of the table (not shown) from the object clusters.
 
-#### Euclidean Clustering
+### Euclidean Clustering
 The PCL implementation is a DBSCAN-like algorithm for assigning points of a pointcloud to
 cluster groups.  The parameters required are a tolerance level (i.e. an approximate distance to
 search for neighboring points), the minimum size of a valid cluster, and the maximum size of
 a valid cluster.  The tolerance setting can dictate whether multiple groups are classified together,
 or whether a single cluster is classified into multiple groups, and is usually set emperically.
-Figure 6 shows the unique clustering that the Euclidean Clustering algorithm can acheive.  
+Figure 6 shows the unique clustering that the Euclidean Clustering algorithm can acheive.  These
+clustering steps were also performed inside `pcl_callback` within the `node.py` script.  
 
 ![alt_text][clusters]
 **Figure 6**- Unique clusters identified by Euclidean Clustering.  But which cluster is which object?!
@@ -107,8 +108,8 @@ Figure 6 shows the unique clustering that the Euclidean Clustering algorithm can
 #### Object Detection
 Having seperated individual clouds into unique clusters, we are now able to perform object prediction
 using the trained SVM model.  The points of each cluster were subjected to the same feature extraction
-function, and these features were supplied to the SVM classifier.  
-
+function, and these features were supplied to the SVM classifier.  Object detection
+was performed cluster by cluster in the `pcl_callback` function in `node.py`
 
 #### Centroid calculation
 The points for each object were analyzed for their average position (centroid) in
@@ -118,7 +119,8 @@ are stored within yaml files within the `pr2_robot/results` directory.
 ### Pick Message
 These pieces of information were assembled into a PickPlace message, which was then sent to the
 `pick_place_routine` service proxy as a request for robot movement.  The resulting actions were
-generally successful in picking, but rarely successful in placing [See discussion].
+generally successful in picking, but rarely successful in placing [See discussion].  This logic
+was performed within the `pr2_mover` function in `node.py`.
 
 ## Discussion
 
