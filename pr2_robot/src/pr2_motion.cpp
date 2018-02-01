@@ -94,7 +94,7 @@ PR2Motion::PR2Motion(ros::NodeHandle nh)
   ROS_INFO("Added object list to the world");
 
   // Allow MoveGroup to add the collision objects in the world
-  ros::Duration(1.0).sleep();
+  ros::Duration(5.0).sleep();
   //visual_tools_ptr->prompt("next step");
 
   // We can print the name of the reference frame for this robot.
@@ -120,17 +120,17 @@ PR2Motion::PR2Motion(ros::NodeHandle nh)
 
   world_joint_value.data = -1.57;
   world_joint_pub.publish(world_joint_value);
-  ros::Duration(1.0).sleep();
+  ros::Duration(5.0).sleep();
   visual_tools_ptr->prompt("next step");
 
   world_joint_value.data = 1.57;
   world_joint_pub.publish(world_joint_value);
-  ros::Duration(1.0).sleep();
+  ros::Duration(5.0).sleep();
   visual_tools_ptr->prompt("next step");
 
   world_joint_value.data = 0;
   world_joint_pub.publish(world_joint_value);
-  ros::Duration(1.0).sleep();
+  ros::Duration(5.0).sleep();
   visual_tools_ptr->prompt("next step");
 
   //Target object pick pose
@@ -289,7 +289,7 @@ PR2Motion::PR2Motion(ros::NodeHandle nh)
 
     //Close Gripper
     OperateRightGripper(true);
-    ros::Duration(3.0).sleep();
+    ros::Duration(5.0).sleep();
 
     //Reach movement
     right_move_group.setStartStateToCurrentState();
@@ -403,7 +403,7 @@ bool PR2Motion::OperateRightGripper(const bool &close_gripper)
   }
 
   right_gripper_group.setJointValueTarget(gripper_joint_positions);
-  ros::Duration(1.5).sleep();
+  ros::Duration(5.0).sleep();
 
   bool success = right_gripper_group.move();
   return success;
@@ -435,7 +435,7 @@ bool PR2Motion::OperateLeftGripper(const bool &close_gripper)
   }
 
   left_gripper_group.setJointValueTarget(gripper_joint_positions);
-  ros::Duration(1.5).sleep();
+  ros::Duration(5.0).sleep();
 
   bool success = left_gripper_group.move();
   return success;
