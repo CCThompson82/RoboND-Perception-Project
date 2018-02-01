@@ -7,54 +7,134 @@
 The objective of this project was to execute a pick and place task for the PR2 robot.  The requisite steps for succesful
 execution of the pick and place task included the training/generation of an object detection model, setting up a perception
 node capable of receiving pointcloud message information via an rgbd sensor, filtering the incoming pointcloud data into
-unique object clusters, and then predicting the label for each unique cluster.  Object detection outcomes were stored in
+unique object clusters, and then predicting the label for each unique cluster.  Object detection outcomes were stored in the
+`pr2_robot/results` directory.  
+
+[//]: # (Image References)
+
+[raw]: ./misc_images/raw.png
+[denoised]: ./misc_images/denoised.png
+[passthrough]: ./misc_images/passthrough.png
+[voxel]: ./misc_images/voxel_filter.png
+[table]: ./misc_images/table.png
+[objects]: ./misc_images/objects.png
+[clusters]: ./misc_images/clusters.png
+
+## Methods
+
+### Training an object detection model
+The first step to this project was the training of a model capable of recognizing pointcloud
+information as a specific object.  To accomplish this, the scripts from Exercise 3 that were
+utilized for feature extraction and svm classifer training were copied into this repository.  
+These scripts were:
+  * `training.launch` into `pr2_robot/launch`
+  * `capture_features.py`, `train_svm.py` into `pr2_robot/scripts`
+  * `features.py`, `training_helper.py`, `pcl_helper.py` into `pr2_robot/src/sensor_stick`
+
+In `capture_features.py`, the number of pointclouds recorded for each object was increased to 30, and in
+`features.py` the number of color and normal features extracted were set to 64, and 32 respectively.
+Once parameters were set, `training.launch` was launched which resulted in a training set pickle being
+stored to the `pr2_robot/modelling` directory.  `train_svm` was then run, which received this
+training set, fit a linear svm classifer, and provided cross-validation confusion matrix for the
+models performance.  The accuracy of the model exceeded 80% for all objects in a 5-fold cross-validation.
 
 
-# Required Steps for a Passing Submission:
-1. Extract features and train an SVM model on new objects (see `pick_list_*.yaml` in `/pr2_robot/config/` for the list of models you'll be trying to identify).
-2. Write a ROS node and subscribe to `/pr2/world/points` topic. This topic contains noisy point cloud data that you must work with.
-3. Use filtering and RANSAC plane fitting to isolate the objects of interest from the rest of the scene.
-4. Apply Euclidean clustering to create separate clusters for individual items.
-5. Perform object recognition on these objects and assign them labels (markers in RViz).
-6. Calculate the centroid (average in x, y and z) of the set of points belonging to that each object.
-7. Create ROS messages containing the details of each object (name, pick_pose, etc.) and write these messages out to `.yaml` files, one for each of the 3 scenarios (`test1-3.world` in `/pr2_robot/worlds/`).  [See the example `output.yaml` for details on what the output should look like.](https://github.com/udacity/RoboND-Perception-Project/blob/master/pr2_robot/config/output.yaml)  
-8. Submit a link to your GitHub repo for the project or the Python code for your perception pipeline and your output `.yaml` files (3 `.yaml` files, one for each test world).  You must have correctly identified 100% of objects from `pick_list_1.yaml` for `test1.world`, 80% of items from `pick_list_2.yaml` for `test2.world` and 75% of items from `pick_list_3.yaml` in `test3.world`.
-9. Congratulations!  Your Done!
+### ROS NODE
 
-# Extra Challenges: Complete the Pick & Place
-7. To create a collision map, publish a point cloud to the `/pr2/3d_map/points` topic and make sure you change the `point_cloud_topic` to `/pr2/3d_map/points` in `sensors.yaml` in the `/pr2_robot/config/` directory. This topic is read by Moveit!, which uses this point cloud input to generate a collision map, allowing the robot to plan its trajectory.  Keep in mind that later when you go to pick up an object, you must first remove it from this point cloud so it is removed from the collision map!
-8. Rotate the robot to generate collision map of table sides. This can be accomplished by publishing joint angle value(in radians) to `/pr2/world_joint_controller/command`
-9. Rotate the robot back to its original state.
-10. Create a ROS Client for the “pick_place_routine” rosservice.  In the required steps above, you already created the messages you need to use this service. Checkout the [PickPlace.srv](https://github.com/udacity/RoboND-Perception-Project/tree/master/pr2_robot/srv) file to find out what arguments you must pass to this service.
-11. If everything was done correctly, when you pass the appropriate messages to the `pick_place_routine` service, the selected arm will perform pick and place operation and display trajectory in the RViz window
-12. Place all the objects from your pick list in their respective dropoff box and you have completed the challenge!
-13. Looking for a bigger challenge?  Load up the `challenge.world` scenario and see if you can get your perception pipeline working there!
+In the script `pr2_robot/scripts/node.py` the necessary publishers and subscribers were
+initiated in the `__main__` of the script.  The incoming pointcloud data was subscribed
+via `pcl_subscriber`, and each step of the filtering pipeline was published for visual
+inspection, debugging, and demonstration purposes.
 
-## [Rubric](https://review.udacity.com/#!/rubrics/1067/view) Points
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
+### Filtering
 
----
-### Writeup / README
+The raw incoming pointcloud feed requires processing in order to be efficiently used.  An
+example of the incoming feed is seen in Figure 1.  
 
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  
+![alt text][raw]
+**Figure 1**- The raw pointcloud feed contains stochastic noise.  
 
-You're reading it!
+#### Statistical Outlier Filter
+A statistical outlier filter was used to remove points that exceeded the standard
+deviation position from their neighborhood average.  The resultant feed after this denoising
+can be observed in Figure 2.  
 
-### Exercise 1, 2 and 3 pipeline implemented
-#### 1. Complete Exercise 1 steps. Pipeline for filtering and RANSAC plane fitting implemented.
+![alt_text][denoised]
+**Figure 2**- Removal of statistical outliers cleans the pointcloud feed to a more
+accurate representation of reality.  
 
-#### 2. Complete Exercise 2 steps: Pipeline including clustering for segmentation implemented.  
+#### Voxelation
+Once outliers were removed, a voxelation filter could be applied for an accurate pointcloud
+representation of reality.  Voxelation is the compression of a pointcloud into specific positions
+based on the presence or absence of raw points in that volume of the original feed.  The result
+is a downsampled feed that does not lose much information, as nearly coincident points are
+merged into the same voxel position.  An example of voxelation is shown in Figure 3.
 
-#### 2. Complete Exercise 3 Steps.  Features extracted and SVM trained.  Object recognition implemented.
-Here is an example of how to include an image in your writeup.
+![alt_text][voxel]
+**Figure 3**- Voxel downsampling of the denoised pointcloud
 
-![demo-1](https://user-images.githubusercontent.com/20687560/28748231-46b5b912-7467-11e7-8778-3095172b7b19.png)
 
-### Pick and Place Setup
+#### Passthrough Filter
 
-#### 1. For all three tabletop setups (`test*.world`), perform object recognition, then read in respective pick list (`pick_list_*.yaml`). Next construct the messages that would comprise a valid `PickPlace` request output them to `.yaml` format.
+The denoised pointcloud feed was then filtered through a z-plane passthrough filter, intended
+to isolate the table and objects of interest.  The range for the pass through filter were
+determined empirically.
 
-And here's another image!
-![demo-2](https://user-images.githubusercontent.com/20687560/28748286-9f65680e-7468-11e7-83dc-f1a32380b89c.png)
+#### Table and Object Segmentation
 
-Spend some time at the end to discuss your code, what techniques you used, what worked and why, where the implementation might fail and how you might improve it if you were going to pursue this project further.  
+The next step of the pipeline was to isolate objects on top of the table from the points representing
+the table itself.  To accomplish this feat, a Random Sample Consensus filter was applied to the
+passthrough pointcloud.  Given a plane height of approximately 2 cm, the RANSAC filter was capable
+of isolating points belonging to the objects from points belonging to the table.  An example of the
+RANSAC filter outlier feed (objects) is shown in Figure 4.
+
+![alt_text][objects]
+**Figure 4**- RANSAC separation of the table (not shown) from the object clusters.
+
+#### Euclidean Clustering
+The PCL implementation is a DBSCAN-like algorithm for assigning points of a pointcloud to
+cluster groups.  The parameters required are a tolerance level (i.e. an approximate distance to
+search for neighboring points), the minimum size of a valid cluster, and the maximum size of
+a valid cluster.  The tolerance setting can dictate whether multiple groups are classified together,
+or whether a single cluster is classified into multiple groups, and is usually set emperically.
+Figure 5 shows the unique clustering that the Euclidean Clustering algorithm can acheive.  
+
+![alt_text][clusters]
+**Figure 5**- Unique clusters identified by Euclidean Clustering.  But which cluster is which object?!
+
+#### Object Detection
+Having seperated individual clouds into unique clusters, we are now able to perform object prediction
+using the trained SVM model.  The points of each cluster were subjected to the same feature extraction
+function, and these features were supplied to the SVM classifier.  
+
+
+#### Centroid calculation
+The points for each object were analyzed for their average position (centroid) in
+order to inform the robot pick pose. The results of this classification
+are stored within yaml files within the `pr2_robot/results` directory.  
+
+### Pick Message
+These pieces of information were assembled into a PickPlace message, which was then sent to the
+`pick_place_routine` service proxy as a request for robot movement.  The resulting actions were
+generally successful in picking, but rarely successful in placing [See discussion].
+
+## Discussion
+
+To my vantage, all objects in each of the 3 worlds were correctly identified.  No KeyErrors were
+noticed, originating the search for an objects dropbox location where it did not exist in the pick
+set.  The model used for object detection was an SVM trained on normality and color features of
+each object.  The implementation seemed to work well, though I did need to increase the number of
+vantages for each object from about 5 to 30 in order to achieve good performance in cross-validation
+accuracy.  
+
+The identification of centroid positions was generally accurate, however it is important to note that
+a single-vantage pointcloud will generate a biased centroid for the objects points, as it can only
+detect the front of the object.  Rotation around the object, combined with some sort of memory (like
+iterative closest point) would provide a more realistic representation of the object and a more
+accurate calculation of its centroid.  Nevertheless, objects were routinely picked given the current
+implementation.  
+
+## Conclusion
+
+In conclusion, the pipeline of filtering, clustering, and object detection were sufficient to
+routinely identify a series of objects for a pick and place task.  
